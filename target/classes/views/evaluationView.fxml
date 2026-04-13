@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.geometry.Insets?>
+
+<HBox xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="controllers.EvaluationController"
+      stylesheets="@../css/style.css"
+      styleClass="admin-root">
+
+    <!-- ═══════════════════════════════════════════
+         SIDEBAR ADMIN
+    ════════════════════════════════════════════ -->
+    <VBox styleClass="admin-sidebar" prefWidth="185" spacing="0">
+        <padding><Insets top="24" right="12" bottom="20" left="12"/></padding>
+
+        <!-- Logo -->
+        <VBox spacing="2" style="-fx-padding: 0 0 30 4;">
+            <HBox alignment="CENTER_LEFT" spacing="8">
+                <Label text="🎓" style="-fx-font-size:20px;"/>
+                <Label text="UNILEARN" styleClass="admin-logo-text"/>
+            </HBox>
+            <Label text="Neural Edition" styleClass="admin-logo-sub"/>
+        </VBox>
+
+        <!-- Navigation (sans Questions et Rendus) -->
+        <VBox spacing="4" VBox.vgrow="ALWAYS">
+            <Button fx:id="btnNavStats"     text="📊  Statistiques"   styleClass="admin-nav-item" maxWidth="Infinity"/>
+            <Button fx:id="btnNavEvals"     text="📋  Évaluations"    styleClass="admin-nav-item, admin-nav-active" maxWidth="Infinity"/>
+            <Label text="" style="-fx-min-height:16;"/>
+            <Button fx:id="btnVueEtudiant"  text="🎓  Vue Étudiant"   styleClass="admin-nav-item" maxWidth="Infinity"/>
+        </VBox>
+
+        <!-- Profil Admin -->
+        <HBox spacing="10" alignment="CENTER_LEFT" styleClass="admin-profile-box">
+            <Label text="A" styleClass="admin-avatar"/>
+            <VBox spacing="2">
+                <Label text="Admin" styleClass="admin-profile-name"/>
+                <Label text="En ligne" styleClass="admin-profile-status"/>
+            </VBox>
+        </HBox>
+    </VBox>
+
+    <!-- ═══════════════════════════════════════════
+         MAIN CONTENT
+    ════════════════════════════════════════════ -->
+    <VBox HBox.hgrow="ALWAYS" styleClass="admin-main" spacing="0">
+
+        <!-- Header -->
+        <HBox alignment="CENTER_LEFT" spacing="14" styleClass="admin-header">
+            <VBox HBox.hgrow="ALWAYS" spacing="4">
+                <Label text="LISTE DES ÉVALUATIONS" styleClass="admin-page-title"/>
+                <Label fx:id="lblCount" text="" styleClass="admin-page-subtitle"/>
+            </VBox>
+            <TextField fx:id="searchField" promptText="Rechercher..." styleClass="admin-search"/>
+            <Button text="+ NOUVELLE ÉVALUATION" onAction="#handleAjouter" styleClass="admin-btn-add"/>
+        </HBox>
+
+        <!-- Stats statiques (4 cartes : Total, Quiz, Test, Code) -->
+        <HBox spacing="12" style="-fx-padding: 0 24 18 24;">
+            <VBox styleClass="admin-stat-card" prefWidth="155">
+                <Label text="📋" style="-fx-font-size:20px;"/>
+                <Label fx:id="statTotal"  text="—" styleClass="admin-stat-value"/>
+                <Label text="Total"       styleClass="admin-stat-label"/>
+            </VBox>
+            <VBox styleClass="admin-stat-card" prefWidth="155">
+                <Label text="📝" style="-fx-font-size:20px;"/>
+                <Label fx:id="statQuiz"  text="—" styleClass="admin-stat-value"/>
+                <Label text="Quiz"       styleClass="admin-stat-label"/>
+            </VBox>
+            <VBox styleClass="admin-stat-card" prefWidth="155">
+                <Label text="⏱" style="-fx-font-size:20px;"/>
+                <Label fx:id="statTest"  text="—" styleClass="admin-stat-value"/>
+                <Label text="Tests"      styleClass="admin-stat-label"/>
+            </VBox>
+            <VBox styleClass="admin-stat-card" prefWidth="155">
+                <Label text="💻" style="-fx-font-size:20px;"/>
+                <Label fx:id="statCode"  text="—" styleClass="admin-stat-value"/>
+                <Label text="Code"       styleClass="admin-stat-label"/>
+            </VBox>
+        </HBox>
+
+        <!-- Table -->
+        <VBox VBox.vgrow="ALWAYS" style="-fx-padding: 0 24 24 24;">
+            <TableView fx:id="tableEvaluations"
+                       VBox.vgrow="ALWAYS"
+                       styleClass="admin-table"
+                       style="-fx-table-cell-border-color: transparent;">
+                <columns>
+                    <TableColumn fx:id="colTitre"      text="TITRE"        prefWidth="180" minWidth="140"/>
+                    <TableColumn fx:id="colType"       text="TYPE"         prefWidth="80"  minWidth="70"/>
+                    <TableColumn fx:id="colBareme"     text="BARÈME"       prefWidth="80"  minWidth="70"/>
+                    <TableColumn fx:id="colDateLimite" text="DATE LIMITE"  prefWidth="145" minWidth="130"/>
+                    <TableColumn fx:id="colActions"    text="ACTIONS"      prefWidth="355" minWidth="355" sortable="false"/>
+                </columns>
+                <placeholder>
+                    <Label text="Aucune évaluation — cliquez sur « + NOUVELLE ÉVALUATION »"
+                           styleClass="admin-page-subtitle"/>
+                </placeholder>
+            </TableView>
+        </VBox>
+    </VBox>
+</HBox>

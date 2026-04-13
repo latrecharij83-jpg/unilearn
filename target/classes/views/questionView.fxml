@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="controllers.QuestionController"
+      stylesheets="@../css/style.css"
+      styleClass="neural-background"
+      spacing="0">
+
+    <!-- Header -->
+    <HBox alignment="CENTER_LEFT" spacing="16"
+          style="-fx-padding: 22 32 14 32;">
+        <VBox spacing="4" HBox.hgrow="ALWAYS">
+            <Label fx:id="lblEvaluation" text="Questions" styleClass="page-title"
+                   style="-fx-font-size: 24px;"/>
+            <Label text="Gestion des questions de cette évaluation" styleClass="page-subtitle"/>
+        </VBox>
+        <Button text="+ Ajouter une question" onAction="#handleAjouter" styleClass="btn-primary"/>
+        <Button text="Retour aux évaluations" onAction="#handleRetour" styleClass="neon-button"/>
+    </HBox>
+
+    <!-- Separator -->
+    <Region style="-fx-background-color: rgba(255,255,255,0.08); -fx-pref-height: 1;"/>
+
+    <!-- Table -->
+    <VBox VBox.vgrow="ALWAYS" style="-fx-padding: 20 32 32 32;">
+        <VBox VBox.vgrow="ALWAYS"
+              style="-fx-background-color: rgba(255,255,255,0.04);
+                     -fx-background-radius: 16;
+                     -fx-border-radius: 16;
+                     -fx-border-color: rgba(255,255,255,0.10);
+                     -fx-border-width: 1;">
+            <TableView fx:id="tableQuestions"
+                       styleClass="neural-table"
+                       VBox.vgrow="ALWAYS"
+                       style="-fx-background-color: transparent; -fx-border-color: transparent;">
+                <columns>
+                    <TableColumn fx:id="colLibelle" text="Libellé"          prefWidth="300"/>
+                    <TableColumn fx:id="colReponse" text="Réponse correcte" prefWidth="200"/>
+                    <TableColumn fx:id="colOptions" text="Options (QCM)"    prefWidth="220"/>
+                    <TableColumn fx:id="colActions" text="Actions"          prefWidth="200" sortable="false"/>
+                </columns>
+                <placeholder>
+                    <Label text="Aucune question. Cliquez sur « + Ajouter une question »."
+                           styleClass="page-subtitle"/>
+                </placeholder>
+            </TableView>
+        </VBox>
+    </VBox>
+</VBox>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="controllers.RenduController"
+      stylesheets="@../css/style.css"
+      styleClass="neural-background"
+      spacing="0">
+
+    <!-- Header -->
+    <HBox alignment="CENTER_LEFT" spacing="16"
+          style="-fx-padding: 22 32 14 32;">
+        <VBox spacing="4" HBox.hgrow="ALWAYS">
+            <Label fx:id="lblEvaluation" text="Rendus" styleClass="page-title"
+                   style="-fx-font-size: 24px;"/>
+            <Label text="Notation et correction des rendus étudiants" styleClass="page-subtitle"/>
+        </VBox>
+        <Button text="Retour aux évaluations" onAction="#handleRetour" styleClass="neon-button"/>
+    </HBox>
+
+    <!-- Separator -->
+    <Region style="-fx-background-color: rgba(255,255,255,0.08); -fx-pref-height: 1;"/>
+
+    <!-- Table -->
+    <VBox VBox.vgrow="ALWAYS" style="-fx-padding: 20 32 32 32;">
+        <VBox VBox.vgrow="ALWAYS"
+              style="-fx-background-color: rgba(255,255,255,0.04);
+                     -fx-background-radius: 16;
+                     -fx-border-radius: 16;
+                     -fx-border-color: rgba(255,255,255,0.10);
+                     -fx-border-width: 1;">
+            <TableView fx:id="tableRendus"
+                       styleClass="neural-table"
+                       VBox.vgrow="ALWAYS"
+                       style="-fx-background-color: transparent; -fx-border-color: transparent;">
+                <columns>
+                    <TableColumn fx:id="colContenu"  text="Contenu (extrait)"  prefWidth="250"/>
+                    <TableColumn fx:id="colFichier"  text="Fichier joint"       prefWidth="120"/>
+                    <TableColumn fx:id="colNote"     text="Note /20"            prefWidth="100"/>
+                    <TableColumn fx:id="colFeedback" text="Feedback"            prefWidth="180"/>
+                    <TableColumn fx:id="colActions"  text="Actions"             prefWidth="280" sortable="false"/>
+                </columns>
+                <placeholder>
+                    <Label text="Aucun rendu pour cette évaluation."
+                           styleClass="page-subtitle"/>
+                </placeholder>
+            </TableView>
+        </VBox>
+    </VBox>
+</VBox>

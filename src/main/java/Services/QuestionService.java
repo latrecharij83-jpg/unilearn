@@ -16,8 +16,10 @@ public class QuestionService {
     private String colEvalId  = null;
     private boolean scanned   = false;
 
-    private Connection getConn() {
-        return DatabaseConnection.getConnection();
+    private Connection getConn() throws SQLException {
+        Connection c = DatabaseConnection.getConnection();
+        if (c == null) throw new SQLException("DB Connection is null");
+        return c;
     }
 
     /** Détecte les vrais noms de colonnes via SHOW COLUMNS (scopé à la BD active) */

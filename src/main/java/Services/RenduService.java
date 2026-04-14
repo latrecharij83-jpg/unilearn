@@ -9,8 +9,10 @@ import java.util.List;
 
 public class RenduService {
 
-    private Connection getConn() {
-        return DatabaseConnection.getConnection();
+    private Connection getConn() throws SQLException {
+        Connection c = DatabaseConnection.getConnection();
+        if (c == null) throw new SQLException("DB Connection is null");
+        return c;
     }
 
     /** Soumet les réponses d'un étudiant → crée un Rendu avec noteObtenue = -1 */

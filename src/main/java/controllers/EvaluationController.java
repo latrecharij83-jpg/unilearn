@@ -297,8 +297,9 @@ public class EvaluationController {
         btnCancel.setOnAction(e -> stage.close());
         btnSave.setOnAction(e -> {
             // Validation
-            if (fTitre.getText().isBlank()) { err("Le titre est obligatoire."); return; }
-            if (fDesc.getText().isBlank())  { err("La description est obligatoire."); return; }
+            if (fTitre.getText().trim().isBlank()) { err("Le titre est obligatoire."); return; }
+            if (fTitre.getText().trim().length() < 3) { err("Le titre doit contenir au moins 3 caractères."); return; }
+            if (fDesc.getText().trim().isBlank())  { err("La description est obligatoire."); return; }
             if (fType.getValue() == null)   { err("Le type est obligatoire."); return; }
             if (fDate.getValue() == null)   { err("La date limite est obligatoire."); return; }
             float bareme;
@@ -313,19 +314,25 @@ public class EvaluationController {
             if (dl.isBefore(LocalDateTime.now()) && existing == null) {
                 err("La date limite doit être dans le futur."); return;
             }
+            boolean success;
             if (existing == null) {
-                service.ajouter(new Evaluation(fTitre.getText(), fDesc.getText(),
-                        fType.getValue(), dl, bareme, null));
+                success = service.ajouter(new Evaluation(fTitre.getText().trim(), fDesc.getText().trim(),
+                        fType.getValue(), dl, bareme, "")); // pas NULL
             } else {
-                existing.setTitre(fTitre.getText());
-                existing.setDescription(fDesc.getText());
+                existing.setTitre(fTitre.getText().trim());
+                existing.setDescription(fDesc.getText().trim());
                 existing.setType(fType.getValue());
                 existing.setDateLimite(dl);
                 existing.setBareme(bareme);
-                service.modifier(existing);
+                success = service.modifier(existing);
             }
-            refresh();
-            stage.close();
+            
+            if (success) {
+                refresh();
+                stage.close();
+            } else {
+                err("Erreur lors de l'enregistrement dans la base de données. Assurez-vous que xampp est activé.");
+            }
         });
 
         // Boutons fixés en bas (toujours visibles)

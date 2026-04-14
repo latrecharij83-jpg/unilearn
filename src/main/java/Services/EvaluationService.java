@@ -14,11 +14,13 @@ import java.util.List;
  */
 public class EvaluationService {
 
-    private Connection getConn() {
-        return DatabaseConnection.getConnection();
+    private Connection getConn() throws SQLException {
+        Connection c = DatabaseConnection.getConnection();
+        if (c == null) throw new SQLException("DB Connection is null");
+        return c;
     }
 
-    public void ajouter(Evaluation e) {
+    public boolean ajouter(Evaluation e) {
         String req =
             "INSERT INTO evaluation (titre, description, type, date_limite, bareme, quizz_data) " +
             "VALUES (?, ?, ?, ?, ?, ?)";
@@ -29,15 +31,17 @@ public class EvaluationService {
             ps.setTimestamp(4, Timestamp.valueOf(
                     e.getDateLimite() != null ? e.getDateLimite() : LocalDateTime.now()));
             ps.setFloat(5, e.getBareme());
-            ps.setString(6, e.getQuizzData());
+            ps.setString(6, nvl(e.getQuizzData()));
             ps.executeUpdate();
             System.out.println("✅ Évaluation ajoutée : " + e.getTitre());
+            return true;
         } catch (SQLException ex) {
             System.err.println("Erreur ajouter evaluation: " + ex.getMessage());
+            return false;
         }
     }
 
-    public void modifier(Evaluation e) {
+    public boolean modifier(Evaluation e) {
         String req =
             "UPDATE evaluation SET titre=?, description=?, type=?, date_limite=?, bareme=?, quizz_data=? " +
             "WHERE id=?";
@@ -48,12 +52,14 @@ public class EvaluationService {
             ps.setTimestamp(4, Timestamp.valueOf(
                     e.getDateLimite() != null ? e.getDateLimite() : LocalDateTime.now()));
             ps.setFloat(5, e.getBareme());
-            ps.setString(6, e.getQuizzData());
+            ps.setString(6, nvl(e.getQuizzData()));
             ps.setInt(7, e.getId());
             ps.executeUpdate();
             System.out.println("✅ Évaluation modifiée : " + e.getTitre());
+            return true;
         } catch (SQLException ex) {
             System.err.println("Erreur modifier evaluation: " + ex.getMessage());
+            return false;
         }
     }
 
@@ -102,5 +108,5 @@ public class EvaluationService {
         return list;
     }
 
-    private String nvl(String s) { return s != null ? s : ""; }
+    private String nvl(String s) { return (s != null && !s.isBlank()) ? s : "{}"; }
 }

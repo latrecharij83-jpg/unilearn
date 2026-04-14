@@ -1,5 +1,8 @@
+org\example\TestLoad.class
+org\example\TestInsert2.class
 controllers\etudiant\PasserEvaluationController.class
 controllers\EvaluationController.class
 controllers\etudiant\HomeController.class
 controllers\etudiant\CatalogueEvaluationController$1.class
+org\example\TestInsert.class
 controllers\etudiant\CatalogueEvaluationController.class

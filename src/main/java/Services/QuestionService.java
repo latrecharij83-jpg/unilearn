@@ -18,7 +18,7 @@ public class QuestionService {
 
     private Connection getConn() throws SQLException {
         Connection c = DatabaseConnection.getConnection();
-        if (c == null) throw new SQLException("DB Connection is null");
+        if (c == null) throw new SQLException("DB Connection is null – vérifiez que XAMPP est démarré.");
         return c;
     }
 
@@ -27,14 +27,13 @@ public class QuestionService {
         if (scanned) return;
         scanned = true;
         Set<String> cols = new HashSet<>();
-        try (Connection c = getConn();
-             Statement st = c.createStatement();
+        try (Statement st = getConn().createStatement();
              ResultSet rs = st.executeQuery("SHOW COLUMNS FROM question")) {
             while (rs.next()) {
                 cols.add(rs.getString("Field").toLowerCase());
             }
         } catch (SQLException ex) {
-            System.err.println("Erreur scan colonnes question: " + ex.getMessage());
+            System.err.println("❌ Erreur scan colonnes question: " + ex.getMessage());
         }
 
         System.out.println("📋 Colonnes réelles de la table question : " + cols);
@@ -64,32 +63,33 @@ public class QuestionService {
     }
 
     // ── INSERT ────────────────────────────────────────────────────────────────
-    public void ajouter(Question q) {
+    public boolean ajouter(Question q) {
         scanColumns();
         String req = "INSERT INTO question (libelle, " + colReponse + ", " + colOptions + ", " + colEvalId + ") " +
                      "VALUES (?, ?, ?, ?)";
-        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(req)) {
+        try (PreparedStatement ps = getConn().prepareStatement(req)) {
             ps.setString(1, q.getLibelle());
             ps.setString(2, q.getReponseCorrecte());
 
-            // Options : NULL si vide, sinon JSON valide ["opt1","opt2",...]
             String optJson = q.getOptionsJson();
             if (optJson == null) ps.setNull(3, Types.VARCHAR);
             else                 ps.setString(3, optJson);
 
             ps.setInt(4, q.getEvaluationId());
-            ps.executeUpdate();
-            System.out.println("✅ Question ajoutée.");
+            int rows = ps.executeUpdate();
+            System.out.println(rows > 0 ? "✅ Question ajoutée." : "⚠️ Aucune ligne insérée pour question.");
+            return rows > 0;
         } catch (SQLException ex) {
-            System.err.println("Erreur ajouter question: " + ex.getMessage());
+            System.err.println("❌ Erreur ajouter question: " + ex.getMessage());
+            return false;
         }
     }
 
     // ── UPDATE ────────────────────────────────────────────────────────────────
-    public void modifier(Question q) {
+    public boolean modifier(Question q) {
         scanColumns();
         String req = "UPDATE question SET libelle=?, " + colReponse + "=?, " + colOptions + "=? WHERE id=?";
-        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(req)) {
+        try (PreparedStatement ps = getConn().prepareStatement(req)) {
             ps.setString(1, q.getLibelle());
             ps.setString(2, q.getReponseCorrecte());
 
@@ -98,21 +98,33 @@ public class QuestionService {
             else                 ps.setString(3, optJson);
 
             ps.setInt(4, q.getId());
-            ps.executeUpdate();
-            System.out.println("✅ Question modifiée.");
+            int rows = ps.executeUpdate();
+            if (rows > 0) {
+                System.out.println("✅ Question modifiée id=" + q.getId());
+                return true;
+            }
+            System.err.println("⚠️ Aucune ligne mise à jour pour question id=" + q.getId());
+            return false;
         } catch (SQLException ex) {
-            System.err.println("Erreur modifier question: " + ex.getMessage());
+            System.err.println("❌ Erreur modifier question: " + ex.getMessage());
+            return false;
         }
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────
-    public void supprimer(int id) {
-        try (Connection c = getConn();
-             PreparedStatement ps = c.prepareStatement("DELETE FROM question WHERE id=?")) {
+    public boolean supprimer(int id) {
+        try (PreparedStatement ps = getConn().prepareStatement("DELETE FROM question WHERE id=?")) {
             ps.setInt(1, id);
-            ps.executeUpdate();
+            int rows = ps.executeUpdate();
+            if (rows > 0) {
+                System.out.println("✅ Question supprimée id=" + id);
+                return true;
+            }
+            System.err.println("⚠️ Aucune question trouvée avec id=" + id);
+            return false;
         } catch (SQLException ex) {
-            System.err.println("Erreur supprimer question: " + ex.getMessage());
+            System.err.println("❌ Erreur supprimer question: " + ex.getMessage());
+            return false;
         }
     }
 
@@ -121,11 +133,10 @@ public class QuestionService {
         scanColumns();
         List<Question> list = new ArrayList<>();
         String req = "SELECT * FROM question WHERE " + colEvalId + "=? ORDER BY id";
-        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(req)) {
+        try (PreparedStatement ps = getConn().prepareStatement(req)) {
             ps.setInt(1, evaluationId);
             ResultSet rs = ps.executeQuery();
 
-            // Lire les noms de colonnes réels du ResultSet
             ResultSetMetaData meta = rs.getMetaData();
             Set<String> rsCols = new HashSet<>();
             for (int i = 1; i <= meta.getColumnCount(); i++) {
@@ -133,11 +144,8 @@ public class QuestionService {
             }
 
             while (rs.next()) {
-                // Lecture réponse correcte
                 String rep = safeGet(rs, rsCols,
                         "reponse_correcte", "reponsecorrecte", "correct_answer", "reponse", "answer");
-
-                // Lecture options (JSON → tableau)
                 String rawOpts = safeGet(rs, rsCols, "options", "choices");
                 String[] opts = Question.parseOptions(rawOpts);
 
@@ -150,7 +158,7 @@ public class QuestionService {
                 ));
             }
         } catch (SQLException ex) {
-            System.err.println("Erreur afficher questions: " + ex.getMessage());
+            System.err.println("❌ Erreur afficher questions: " + ex.getMessage());
         }
         return list;
     }

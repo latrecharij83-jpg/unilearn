@@ -1,5 +1,6 @@
 package controllers;
 
+import Services.PDFExportService;
 import Services.RenduService;
 import entities.Evaluation;
 import entities.Rendu;
@@ -57,14 +58,20 @@ public class RenduController {
         colActions.setCellFactory(col -> new TableCell<>() {
             final Button btnVoir    = btn("Voir détail", "action-button-nav");
             final Button btnNoter   = btn("Noter",       "action-button-success");
+            final Button btnPdf     = btn("📥 PDF",      "action-button-nav");
             final Button btnSupp    = btn("Supprimer",   "action-button-delete");
-            final HBox box = new HBox(6, btnVoir, btnNoter, btnSupp);
+            final HBox box = new HBox(6, btnVoir, btnNoter, btnPdf, btnSupp);
 
             {
                 box.setAlignment(Pos.CENTER_LEFT);
-                btnVoir.setOnAction(e -> voirDetail(getTableView().getItems().get(getIndex())));
+                btnVoir.setOnAction(e  -> voirDetail(getTableView().getItems().get(getIndex())));
                 btnNoter.setOnAction(e -> openNotation(getTableView().getItems().get(getIndex())));
-                btnSupp.setOnAction(e -> confirmer(getTableView().getItems().get(getIndex())));
+                btnSupp.setOnAction(e  -> confirmer(getTableView().getItems().get(getIndex())));
+                btnPdf.setOnAction(e   -> {
+                    Rendu r = getTableView().getItems().get(getIndex());
+                    PDFExportService.exportRendu(r, evaluation,
+                            btnPdf.getScene().getWindow());
+                });
             }
 
             @Override protected void updateItem(Void v, boolean empty) {
@@ -89,18 +96,23 @@ public class RenduController {
         info.setStyle("-fx-text-fill:#d5b9ea; -fx-font-size:12px;");
 
         TextArea area = new TextArea(r.getContenuTexte());
-        area.setEditable(false); area.setWrapText(true); area.setPrefHeight(280);
+        area.setEditable(false); area.setWrapText(true); area.setPrefHeight(240);
         area.getStyleClass().add("neural-input");
+
+        Button btnPdf = new Button("📥 Télécharger le rapport PDF");
+        btnPdf.getStyleClass().add("btn-primary");
+        btnPdf.setOnAction(e -> PDFExportService.exportRendu(r, evaluation, s));
 
         Button btnClose = new Button("Fermer"); btnClose.getStyleClass().add("neon-button");
         btnClose.setOnAction(e -> s.close());
-        HBox btnRow = new HBox(btnClose); btnRow.setAlignment(Pos.CENTER_RIGHT);
+        HBox btnRow = new HBox(12, btnPdf, btnClose);
+        btnRow.setAlignment(Pos.CENTER_RIGHT);
 
         VBox root = new VBox(12, info, area, btnRow);
         root.setPadding(new Insets(24));
         root.getStyleClass().add("modal-page");
         root.getStylesheets().add(getClass().getResource("/css/style.css").toExternalForm());
-        s.setScene(new Scene(root, 600, 400));
+        s.setScene(new Scene(root, 620, 420));
         s.showAndWait();
     }
 
@@ -139,8 +151,9 @@ public class RenduController {
             } catch (NumberFormatException ex) {
                 err("La note doit être un nombre entre 0 et 20."); return;
             }
-            service.noter(rendu.getId(), note, fFeedback.getText());
-            refresh(); s.close();
+            boolean ok = service.noter(rendu.getId(), note, fFeedback.getText());
+            if (ok) { refresh(); s.close(); }
+            else { err("Notation échouée – vérifiez que XAMPP est démarré."); }
         });
 
         VBox root = new VBox(grid, btnRow);
@@ -155,7 +168,11 @@ public class RenduController {
         a.setTitle("Confirmer"); a.setHeaderText("Supprimer ce rendu ?");
         a.setContentText("Cette action est irréversible.");
         Optional<ButtonType> res = a.showAndWait();
-        if (res.isPresent() && res.get() == ButtonType.OK) { service.supprimer(r.getId()); refresh(); }
+        if (res.isPresent() && res.get() == ButtonType.OK) {
+            boolean ok = service.supprimer(r.getId());
+            if (ok) { refresh(); }
+            else { err("Suppression échouée – vérifiez que XAMPP est démarré."); }
+        }
     }
 
     private void refresh() {

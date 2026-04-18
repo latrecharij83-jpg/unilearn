@@ -365,7 +365,14 @@ public class EvaluationController {
         a.setHeaderText("Supprimer \"" + ev.getTitre() + "\" ?");
         a.setContentText("Toutes les questions et rendus associés seront aussi supprimés.");
         Optional<ButtonType> r = a.showAndWait();
-        if (r.isPresent() && r.get() == ButtonType.OK) { service.supprimer(ev.getId()); refresh(); }
+        if (r.isPresent() && r.get() == ButtonType.OK) {
+            boolean ok = service.supprimer(ev.getId());
+            if (ok) {
+                refresh();
+            } else {
+                err("Suppression échouée – vérifiez que XAMPP est démarré et que l'évaluation existe en base de données.");
+            }
+        }
     }
 
     private void ouvrirVue(String fxml, String titre, Evaluation ev) {

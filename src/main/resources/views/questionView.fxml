@@ -19,6 +19,7 @@
             <Label text="Gestion des questions de cette évaluation" styleClass="page-subtitle"/>
         </VBox>
         <Button text="+ Ajouter une question" onAction="#handleAjouter" styleClass="btn-primary"/>
+        <Button text="🤖 Générer avec IA" onAction="#handleGenererIA" styleClass="ai-button"/>
         <Button text="Retour aux évaluations" onAction="#handleRetour" styleClass="neon-button"/>
     </HBox>
 

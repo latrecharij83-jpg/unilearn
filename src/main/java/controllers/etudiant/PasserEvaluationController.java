@@ -1,19 +1,29 @@
 package controllers.etudiant;
 
+import Services.PDFExportService;
 import Services.QuestionService;
 import Services.RenduService;
+import Services.ai.AIService;
+import Services.ai.CorrectionResult;
+import Services.ai.OpenAIService;
 import entities.Evaluation;
 import entities.Question;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.util.Duration;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Contrôleur pour passer une évaluation – côté étudiant.
@@ -33,7 +43,12 @@ public class PasserEvaluationController {
     private final Map<Integer, String> reponses = new HashMap<>();
 
     private final QuestionService questionService = new QuestionService();
-    private final RenduService renduService = new RenduService();
+    private final RenduService    renduService    = new RenduService();
+    private final AIService       aiService       = new OpenAIService();
+
+    // ── Aide étudiant ──
+    private boolean      cinquanteCinquanteUtilise = false;
+    private final Set<Integer> hintsUtilises       = new HashSet<>();
 
     // UI references
     private Label lblProgress;
@@ -43,6 +58,12 @@ public class PasserEvaluationController {
     private VBox optionsBox;
     private HBox stepsIndicator;
     private List<Button> stepButtons = new ArrayList<>();
+
+    // ── Timer Quiz ──
+    private static final int SECONDS_PER_QUESTION = 60;
+    private Timeline questionTimer;
+    private Label    lblTimer;
+    private int      secondsLeft;
 
     // Email identification
     private TextField emailField;
@@ -101,6 +122,21 @@ public class PasserEvaluationController {
         lblQuestionNum = new Label();
         lblQuestionNum.setStyle("-fx-text-fill: #f08afc; -fx-font-size: 13px; -fx-font-weight: 800;");
 
+        // Timer cercle (visible uniquement en mode Quiz)
+        lblTimer = new Label("60");
+        lblTimer.setMinSize(52, 52);
+        lblTimer.setMaxSize(52, 52);
+        lblTimer.setAlignment(Pos.CENTER);
+        lblTimer.setStyle(timerStyle("#6affdd", "rgba(106,255,221,0.15)"));
+        boolean isQuiz = isQuizType();
+        lblTimer.setVisible(isQuiz);
+        lblTimer.setManaged(isQuiz);
+
+        Region qHeaderSpacer = new Region();
+        HBox.setHgrow(qHeaderSpacer, Priority.ALWAYS);
+        HBox questionHeader = new HBox(lblQuestionNum, qHeaderSpacer, lblTimer);
+        questionHeader.setAlignment(Pos.CENTER_LEFT);
+
         lblQuestionText = new Label();
         lblQuestionText.setStyle("-fx-text-fill: #ffffff; -fx-font-size: 18px; -fx-font-weight: 700;");
         lblQuestionText.setWrapText(true);
@@ -108,7 +144,7 @@ public class PasserEvaluationController {
         optionsBox = new VBox(10);
         optionsBox.setPadding(new Insets(12, 0, 0, 0));
 
-        questionContainer.getChildren().addAll(lblQuestionNum, lblQuestionText, optionsBox);
+        questionContainer.getChildren().addAll(questionHeader, lblQuestionText, optionsBox);
 
         // ── Nav buttons ──
         HBox navButtons = buildNavButtons();
@@ -265,6 +301,7 @@ public class PasserEvaluationController {
         saveCurrentAnswer();
 
         currentIndex = index;
+        startTimer(); // Redémarrer le timer à chaque question (Quiz seulement)
         Question q = questions.get(index);
 
         lblQuestionNum.setText("QUESTION " + (index + 1) + " / " + questions.size());
@@ -340,6 +377,67 @@ public class PasserEvaluationController {
             optionsBox.getChildren().addAll(hint, ta);
         }
 
+        // ── Boutons aide : Indice IA & 50/50 ────────────────────────────────
+        HBox aideRow = new HBox(10);
+        aideRow.setAlignment(Pos.CENTER_LEFT);
+        aideRow.setPadding(new Insets(14, 0, 0, 0));
+
+        // Conteneur de la bulle d'indice (vide au départ)
+        VBox hintContainer = new VBox();
+        hintContainer.setMaxWidth(680);
+
+        // ·· Bouton Indice IA ··
+        Button btnHint = new Button("💡 Indice IA");
+        btnHint.getStyleClass().add("hint-button");
+        if (hintsUtilises.contains(q.getId())) btnHint.setDisable(true);
+
+        final Question qFinal = q;
+        btnHint.setOnAction(hEv -> {
+            btnHint.setDisable(true);
+            btnHint.setText("⏳ Chargement...");
+            hintsUtilises.add(qFinal.getId());
+
+            Task<String> hintTask = new Task<>() {
+                @Override protected String call() {
+                    return aiService.demanderIndice(qFinal.getLibelle(), qFinal.getReponseCorrecte());
+                }
+            };
+            hintTask.setOnSucceeded(ev -> {
+                btnHint.setText("💡 Indice IA");
+                Label hintLbl = new Label(hintTask.getValue());
+                hintLbl.getStyleClass().add("hint-bubble-text");
+                hintLbl.setWrapText(true);
+                hintLbl.setMaxWidth(640);
+                VBox bubble = new VBox(hintLbl);
+                bubble.getStyleClass().add("hint-bubble");
+                hintContainer.getChildren().setAll(bubble);
+            });
+            hintTask.setOnFailed(ev -> {
+                btnHint.setText("💡 Indice IA");
+                btnHint.setDisable(false);
+                hintsUtilises.remove(qFinal.getId());
+            });
+            Thread ht = new Thread(hintTask, "hint-thread");
+            ht.setDaemon(true); ht.start();
+        });
+        aideRow.getChildren().add(btnHint);
+
+        // ·· Bouton 50/50 (QCM seulement, ≥3 options) ··
+        if (opts != null && opts.length >= 3) {
+            Button btnFifty = new Button(cinquanteCinquanteUtilise ? "✓ 50/50 utilisé" : "🎲 50/50");
+            btnFifty.getStyleClass().add("fifty-button");
+            btnFifty.setDisable(cinquanteCinquanteUtilise);
+            btnFifty.setOnAction(fEv -> {
+                cinquanteCinquanteUtilise = true;
+                btnFifty.setDisable(true);
+                btnFifty.setText("✓ 50/50 utilisé");
+                applyFiftyFifty(qFinal.getReponseCorrecte(), optionsBox);
+            });
+            aideRow.getChildren().add(btnFifty);
+        }
+
+        optionsBox.getChildren().addAll(aideRow, hintContainer);
+
         // Nav button visibility
         btnPrev.setDisable(index == 0);
         boolean isLast = (index == questions.size() - 1);
@@ -386,6 +484,7 @@ public class PasserEvaluationController {
 
     // ─── SUBMIT ─────────────────────────────────────────────────────────────
     private void handleSubmit() {
+        stopTimer(); // Arrêter le timer avant toute validation
         saveCurrentAnswer();
 
         // Validate email
@@ -434,22 +533,77 @@ public class PasserEvaluationController {
         // Construire le JSON des réponses (inclut l'email)
         String json = buildReponsesJson(email);
 
-        // Soumettre via RenduService (userId = 0 car pas de système d'auth)
-        renduService.soumettre(evaluation.getId(), 0, json);
+        // Soumettre via RenduService
+        int renduId = renduService.soumettre(evaluation.getId(), 0, json);
 
-        // Succès
-        Alert success = new Alert(Alert.AlertType.INFORMATION);
-        success.setTitle("Soumission réussie ! 🎉");
-        success.setHeaderText(null);
-        success.setContentText(
-            "✅ Vos réponses ont été soumises avec succès !\n\n" +
-            "📧 Identifiant : " + email + "\n" +
-            "📝 Évaluation : " + evaluation.getTitre() + "\n\n" +
-            "Votre copie est en attente de notation par l'enseignant.");
-        success.showAndWait();
+        if (renduId < 0) {
+            Alert error = new Alert(Alert.AlertType.ERROR);
+            error.setTitle("Erreur de soumission");
+            error.setHeaderText("La soumission a échoué");
+            error.setContentText("Impossible d'enregistrer vos réponses.\nVérifiez que XAMPP est démarré et réessayez.");
+            error.showAndWait();
+            return;
+        }
 
-        // Retour au catalogue
-        HomeController.loadView(rootPane, "/views/etudiant/catalogueEvaluationsView.fxml");
+        // ── Correction automatique par IA ─────────────────────────────────────
+        Stage correctionStage = new Stage();
+        correctionStage.initModality(Modality.APPLICATION_MODAL);
+        correctionStage.setTitle("🤖 Correction IA en cours...");
+        correctionStage.setResizable(false);
+
+        ProgressIndicator pi = new ProgressIndicator();
+        pi.setPrefSize(52, 52);
+        Label corrLabel = new Label("L'IA analyse vos réponses, veuillez patienter...");
+        corrLabel.setStyle("-fx-text-fill: #a5f3fc; -fx-font-size: 13px;");
+        VBox corrBox = new VBox(18, pi, corrLabel);
+        corrBox.setAlignment(Pos.CENTER);
+        corrBox.setPadding(new Insets(36));
+        corrBox.getStyleClass().add("modal-page");
+        corrBox.getStylesheets().add(getClass().getResource("/css/style.css").toExternalForm());
+        correctionStage.setScene(new Scene(corrBox, 380, 180));
+
+        // Snapshot immuable des données pour le thread
+        final List<Question> snapshotQs     = new ArrayList<>(questions);
+        final Map<Integer, String> snapshotR = new HashMap<>(reponses);
+        final int finalRenduId              = renduId;
+        final String finalEmail             = email;
+
+        Task<CorrectionResult> corrTask = new Task<>() {
+            @Override
+            protected CorrectionResult call() {
+                return aiService.corrigerReponses(
+                        snapshotQs, snapshotR,
+                        evaluation.getType(), evaluation.getBareme());
+            }
+        };
+
+        corrTask.setOnSucceeded(ev -> {
+            CorrectionResult corrResult = corrTask.getValue();
+            // Enregistrer note + feedback dans la BD
+            renduService.noter(finalRenduId, corrResult.getNote(), corrResult.getFeedback());
+            correctionStage.close();
+            afficherResultatCorrection(finalEmail, corrResult);
+        });
+
+        corrTask.setOnFailed(ev -> {
+            correctionStage.close();
+            // Fallback : succès sans note
+            Alert success = new Alert(Alert.AlertType.INFORMATION);
+            success.setTitle("Soumission réussie ! 🎉");
+            success.setHeaderText(null);
+            success.setContentText(
+                "✅ Vos réponses ont été soumises !\n\n" +
+                "📧 Identifiant : " + finalEmail + "\n" +
+                "📝 Évaluation : " + evaluation.getTitre() + "\n\n" +
+                "La correction automatique a échoué. Votre copie sera notée manuellement.");
+            success.showAndWait();
+            HomeController.loadView(rootPane, "/views/etudiant/catalogueEvaluationsView.fxml");
+        });
+
+        Thread ct = new Thread(corrTask, "ai-correction");
+        ct.setDaemon(true);
+        ct.start();
+        correctionStage.show(); // non-bloquant : les callbacks gèrent la fermeture
     }
 
     private String buildReponsesJson(String email) {
@@ -473,5 +627,188 @@ public class PasserEvaluationController {
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
+    }
+
+    // ─── 50/50 : garde 1 bonne + 1 mauvaise, cache le reste ───────────────────
+    private void applyFiftyFifty(String reponseCorrecte, VBox optsBox) {
+        String repTrim = reponseCorrecte.trim();
+
+        // Ne considérer QUE les HBox contenant un RadioButton (exclut aideRow)
+        List<HBox> optionRows = optsBox.getChildren().stream()
+                .filter(n -> n instanceof HBox)
+                .map(n -> (HBox) n)
+                .filter(hb -> hb.getChildren().stream().anyMatch(c -> c instanceof RadioButton))
+                .collect(Collectors.toList());
+
+        if (optionRows.size() < 2) return; // Pas assez d'options
+
+        // Séparer bonne réponse et mauvaises réponses
+        List<HBox> wrongBoxes = new ArrayList<>();
+        for (HBox hb : optionRows) {
+            boolean isCorrect = hb.getChildren().stream()
+                    .anyMatch(c -> c instanceof RadioButton
+                            && ((RadioButton) c).getText().trim().equalsIgnoreCase(repTrim));
+            if (!isCorrect) wrongBoxes.add(hb);
+        }
+
+        if (wrongBoxes.isEmpty()) {
+            System.err.println("⚠️ 50/50 : aucune mauvaise réponse trouvée pour '" + repTrim + "'");
+            return;
+        }
+
+        // Mélanger et garder 1 seule mauvaise, cacher les autres
+        Collections.shuffle(wrongBoxes);
+        for (int i = 1; i < wrongBoxes.size(); i++) {
+            wrongBoxes.get(i).setVisible(false);
+            wrongBoxes.get(i).setManaged(false);
+        }
+        System.out.println("✅ 50/50 : " + (wrongBoxes.size() - 1) + " option(s) cachée(s), 2 restantes");
+    }
+
+    // ─── Modal résultat de correction IA (toujours visible) ───────────────────
+    private void afficherResultatCorrection(String email, CorrectionResult result) {
+        Stage stage = new Stage();
+        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.setTitle("Résultat de l'évaluation");
+        stage.setResizable(true);
+
+        double pct    = evaluation.getBareme() > 0 ? result.getNote() / evaluation.getBareme() : 0;
+        String emoji  = pct >= 0.8 ? "🌟" : pct >= 0.6 ? "👍" : pct >= 0.4 ? "📚" : "💪";
+        String noteStr = String.format("%.1f / %.0f pts", result.getNote(), evaluation.getBareme());
+
+        // Titre
+        Label lblTitre = new Label(emoji + "  Résultat de votre évaluation");
+        lblTitre.setStyle("-fx-text-fill: #26f7ff; -fx-font-size: 18px; -fx-font-weight: 900;");
+
+        // Note
+        Label lblNote = new Label(noteStr);
+        lblNote.setStyle("-fx-text-fill: #6affdd; -fx-font-size: 30px; -fx-font-weight: 900;");
+
+        Label lblInfo = new Label("📧 " + email + "   •   📝 " + evaluation.getTitre());
+        lblInfo.setStyle("-fx-text-fill: #c8aed9; -fx-font-size: 12px;");
+
+        VBox scoreBox = new VBox(6, lblNote, lblInfo);
+        scoreBox.setAlignment(Pos.CENTER);
+        scoreBox.setStyle("-fx-background-color: rgba(106,255,221,0.12);"
+                + "-fx-padding: 16; -fx-background-radius: 12;");
+
+        // Feedback
+        Label lblFeedTitle = new Label("📄 Détail de la correction :");
+        lblFeedTitle.setStyle("-fx-text-fill: #f2deff; -fx-font-size: 13px; -fx-font-weight: 700;");
+
+        String feedText = (result.getFeedback() != null && !result.getFeedback().isBlank())
+                ? result.getFeedback() : "Correction non disponible.";
+        TextArea ta = new TextArea(feedText);
+        ta.setEditable(false);
+        ta.setWrapText(true);
+        ta.setPrefRowCount(12);
+        ta.setPrefWidth(460);
+        ta.setStyle("-fx-control-inner-background: #150430;"
+                + "-fx-text-fill: #e4d0ff;"
+                + "-fx-font-size: 13px;"
+                + "-fx-background-color: #150430;"
+                + "-fx-border-color: rgba(255,255,255,0.12);"
+                + "-fx-border-radius: 8;"
+                + "-fx-background-radius: 8;");
+
+        // Boutons
+        Button btnPdf = new Button("📥 Télécharger PDF");
+        btnPdf.setStyle("-fx-background-color: rgba(106,255,221,0.18);"
+                + "-fx-text-fill: #6affdd; -fx-font-weight: 800; -fx-font-size: 13px;"
+                + "-fx-padding: 10 20; -fx-background-radius: 26;"
+                + "-fx-border-color: #6affdd; -fx-border-radius: 26;"
+                + "-fx-border-width: 1; -fx-cursor: hand;");
+        btnPdf.setOnAction(e -> PDFExportService.exportResultat(
+                email, evaluation, result.getNote(),
+                result.getFeedback(), stage));
+
+        Button btnOk = new Button("✅ Retour au catalogue");
+        btnOk.setStyle("-fx-background-color: linear-gradient(to right, #f08afc, #8e68ff);"
+                + "-fx-text-fill: white; -fx-font-weight: 800; -fx-font-size: 13px;"
+                + "-fx-padding: 10 24; -fx-background-radius: 26; -fx-cursor: hand;");
+        btnOk.setOnAction(e -> {
+            stage.close();
+            HomeController.loadView(rootPane, "/views/etudiant/catalogueEvaluationsView.fxml");
+        });
+        HBox btnRow = new HBox(12, btnPdf, btnOk);
+        btnRow.setAlignment(Pos.CENTER_RIGHT);
+        btnRow.setStyle("-fx-padding: 12 0 0 0;");
+
+        // Conteneur principal — fond inline garanti visible
+        VBox layout = new VBox(14, lblTitre, scoreBox, lblFeedTitle, ta, btnRow);
+        layout.setStyle("-fx-background-color: #1e0840; -fx-padding: 28;");
+        layout.setPrefWidth(500);
+
+        Scene scene = new Scene(layout, 520, 560);
+        stage.setScene(scene);
+        stage.showAndWait();
+    }
+
+    // ─── TIMER (Quiz uniquement) ─────────────────────────────────────────────
+
+    /** Démarre un compte à rebours de 60s. Sans effet si ce n'est pas un Quiz. */
+    private void startTimer() {
+        stopTimer();
+        if (!isQuizType()) return;
+
+        secondsLeft = SECONDS_PER_QUESTION;
+        updateTimerDisplay();
+
+        questionTimer = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+            secondsLeft--;
+            updateTimerDisplay();
+            if (secondsLeft <= 0) {
+                stopTimer();
+                onTimerExpired();
+            }
+        }));
+        questionTimer.setCycleCount(Timeline.INDEFINITE);
+        questionTimer.play();
+    }
+
+    /** Stoppe le timer courant proprement. */
+    private void stopTimer() {
+        if (questionTimer != null) {
+            questionTimer.stop();
+            questionTimer = null;
+        }
+    }
+
+    /** Met à jour l'affichage et la couleur du timer selon le temps restant. */
+    private void updateTimerDisplay() {
+        if (lblTimer == null) return;
+        lblTimer.setText(String.valueOf(secondsLeft));
+        if (secondsLeft > 30) {
+            lblTimer.setStyle(timerStyle("#6affdd", "rgba(106,255,221,0.15)"));  // vert
+        } else if (secondsLeft > 10) {
+            lblTimer.setStyle(timerStyle("#fbbf24", "rgba(251,191,36,0.15)"));   // orange
+        } else {
+            lblTimer.setStyle(timerStyle("#ff6b8a", "rgba(255,107,138,0.15)"));  // rouge
+        }
+    }
+
+    /** Appelé quand le temps expire : passe à la question suivante ou soumet. */
+    private void onTimerExpired() {
+        saveCurrentAnswer();
+        if (currentIndex < questions.size() - 1) {
+            Platform.runLater(() -> showQuestion(currentIndex + 1));
+        } else {
+            Platform.runLater(this::handleSubmit);
+        }
+    }
+
+    private boolean isQuizType() {
+        return evaluation != null && "Quiz".equalsIgnoreCase(evaluation.getType());
+    }
+
+    private String timerStyle(String color, String bg) {
+        return "-fx-background-color: " + bg + ";"
+             + "-fx-background-radius: 50;"
+             + "-fx-border-radius: 50;"
+             + "-fx-border-color: " + color + ";"
+             + "-fx-border-width: 2;"
+             + "-fx-text-fill: " + color + ";"
+             + "-fx-font-size: 16px;"
+             + "-fx-font-weight: 900;";
     }
 }
